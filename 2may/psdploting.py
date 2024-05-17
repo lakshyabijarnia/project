@@ -94,7 +94,8 @@ class VibrationAnalyzer:
         if file_path:
             self.csv_file_path.set(file_path)
             self.data = pd.read_csv(file_path)
-            messagebox.showinfo("Success", "CSV file loaded successfully.\nPath: {}".format(file_path))
+            messagebox.showin
+            fo("Success", "CSV file loaded successfully.\nPath: {}".format(file_path))
 
 
     # def plot_glevels(self):

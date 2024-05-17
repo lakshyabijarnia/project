@@ -192,7 +192,7 @@ class VibrationAnalyzer:
                 # Calculate y-axis limit dynamically based on the maximum value of G-levels
                 max_glevel = max(abs(self.data.iloc[:, i + 1] / self.sensitivity.get()))
                 ax.set_ylim(1e-10, max_glevel * 10)  # Set lower limit to a small positive value for logarithmic scale
-                ax.set_yscale('log')  # Set y-axis scale to logarithmic
+                # ax.set_yscale('log')  # Set y-axis scale to logarithmic
     
                 ax.set_xlabel("Time (s)", fontsize=10)  # Label x-axis with larger font size
                 ax.set_ylabel("G-levels-logrithmic", fontsize=8)  # Label y-axis
@@ -224,8 +224,8 @@ class VibrationAnalyzer:
             plt.plot(self.data.iloc[:, 0], self.data.iloc[:, self.glevel_plot_index + 1] / self.sensitivity.get())
             plt.title(channel)
             plt.xlabel("Time (s)")
-            plt.ylabel("G-levels-lograthmic")
-            plt.yscale('log')  # Set y-axis scale to logarithmic
+            plt.ylabel("G-levels")
+            # plt.yscale('log')  # Set y-axis scale to logarithmic
 
             plt.show()
 
@@ -253,6 +253,7 @@ class VibrationAnalyzer:
                 ax.set_title(channel, fontsize=8)
                 ax.set_xlabel("Frequency (Hz)", fontsize=8)
                 ax.set_ylabel("PSD", fontsize=8)
+                ax.set_yscale("log")
 
             # Adjust spacing between plot frames
             self.psd_fig.subplots_adjust(hspace=1, wspace=0.5, top=0.95)
