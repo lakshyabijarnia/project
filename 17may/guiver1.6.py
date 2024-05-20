@@ -5,8 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from scipy.signal import find_peaks, welch
-from docx import Document
-from docx.shared import Inches
 
 class GLevelPSDApp(tk.Tk):
     def __init__(self):
@@ -37,7 +35,6 @@ class GLevelPSDApp(tk.Tk):
         self.selected_range = None
 
     def create_input_tab(self):
-        # Labels and Entries for sensitivity and sampling frequency
         ttk.Label(self.input_tab, text="Sensor Sensitivity:").grid(row=0, column=0, padx=10, pady=10)
         self.sensitivity_entry = ttk.Entry(self.input_tab)
         self.sensitivity_entry.grid(row=0, column=1, padx=10, pady=10)
@@ -46,15 +43,12 @@ class GLevelPSDApp(tk.Tk):
         self.sampling_freq_entry = ttk.Entry(self.input_tab)
         self.sampling_freq_entry.grid(row=1, column=1, padx=10, pady=10)
 
-        # Buttons for loading data and velocity profile
         ttk.Button(self.input_tab, text="Load CSV/Excel File", command=self.load_file).grid(row=2, column=0, columnspan=2, padx=10, pady=10)
         ttk.Button(self.input_tab, text="Load Velocity Profile", command=self.load_velocity_profile).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 
-        # Button to plot G-levels
         ttk.Button(self.input_tab, text="Plot G-Levels", command=self.plot_glevels).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
 
     def create_glevel_tab(self):
-        # Scrollable Frame for g-level plots
         self.glevel_canvas_frame = tk.Canvas(self.glevel_tab)
         self.scrollbar = ttk.Scrollbar(self.glevel_tab, orient="vertical", command=self.glevel_canvas_frame.yview)
         self.glevel_canvas = ttk.Frame(self.glevel_canvas_frame)
@@ -72,7 +66,6 @@ class GLevelPSDApp(tk.Tk):
         self.glevel_axs = []
 
     def create_psd_tab(self):
-        # Scrollable Frame for PSD plots
         self.psd_canvas_frame = tk.Canvas(self.psd_tab)
         self.scrollbar_psd = ttk.Scrollbar(self.psd_tab, orient="vertical", command=self.psd_canvas_frame.yview)
         self.psd_canvas = ttk.Frame(self.psd_canvas_frame)
@@ -96,7 +89,7 @@ class GLevelPSDApp(tk.Tk):
                 self.data = pd.read_csv(file_path)
             elif file_path.endswith('.xlsx'):
                 self.data = pd.read_excel(file_path)
-
+            messagebox.showinfo("File Loaded", "Vibration profile loaded successfully.")
     def load_velocity_profile(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
         if file_path:
@@ -104,7 +97,7 @@ class GLevelPSDApp(tk.Tk):
                 self.velocity_data = pd.read_csv(file_path)
             elif file_path.endswith('.xlsx'):
                 self.velocity_data = pd.read_excel(file_path)
-
+            messagebox.showinfo("File Loaded", "Velocity profile loaded successfully.")
     def plot_glevels(self):
         if self.data is not None:
             try:
@@ -122,6 +115,8 @@ class GLevelPSDApp(tk.Tk):
             self.glevel_plots.clear()
             self.glevel_figs.clear()
             self.glevel_axs.clear()
+            #toolbar added
+            # plot.toolbar = NavigationToolbar2Tk(plot, self.glevel_canvas)
 
             for i in range(0, min(channel_data.shape[1], 24), 3):
                 fig, axs = plt.subplots(3, 1, figsize=(8, 8))
@@ -138,8 +133,6 @@ class GLevelPSDApp(tk.Tk):
                         velocity_time = self.velocity_data.iloc[:, 0]
                         velocity = self.velocity_data.iloc[:, 1]
                         ax.plot(velocity_time, velocity, label='Velocity', linestyle='--')
-
-                    ax.callbacks.connect('xlim_changed', self.on_xlim_changed)
 
                 self.glevel_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.glevel_canvas)
@@ -183,8 +176,6 @@ class GLevelPSDApp(tk.Tk):
                     ax.set_ylabel("PSD [V**2/Hz]")
                     ax.legend()
 
-                    ax.callbacks.connect('xlim_changed', self.on_xlim_changed)
-
                 self.psd_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.psd_canvas)
                 plot.toolbar = NavigationToolbar2Tk(plot, self.psd_canvas)
@@ -195,13 +186,6 @@ class GLevelPSDApp(tk.Tk):
             self.notebook.select(self.psd_tab)
         else:
             messagebox.showerror("Data Error", "Please load the data file first.")
-
-    def on_xlim_changed(self, event):
-        plt.gca().callbacks.connect('ylim_changed', self.on_ylim_changed)
-
-    def on_ylim_changed(self, event):
-        plt.gca().relim()
-        plt.gca().autoscale_view()
 
     def show_peaks(self):
         for fig in self.glevel_figs:
@@ -215,7 +199,6 @@ class GLevelPSDApp(tk.Tk):
                     for peak in peak_values:
                         ax.text(peak[0], peak[1], f'({peak[0]:.2f}, {peak[1]:.2f})', fontsize=8, color='red')
 
-
-if __name__== "main":
+if __name__ == "__main__":
     app = GLevelPSDApp()
     app.mainloop()
