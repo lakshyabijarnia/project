@@ -237,7 +237,7 @@ class GLevelPSDApp(tk.Tk):
         doc = Document()
         doc.add_heading('G-Level and PSD Plots', level=1)
 
-        if self.glevel_figs:
+        if self.glevel_figs: 
             doc.add_heading('G-Level Plots', level=2)
             for i, fig in enumerate(self.glevel_figs):
                 fig.savefig(f'glevel_plot_{i}.png')

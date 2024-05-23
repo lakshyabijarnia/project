@@ -212,7 +212,6 @@ class GLevelPSDApp(tk.Tk):
             for line in ax.get_lines():
                 xdata = line.get_xdata()
                 ydata = line.get_ydata()
-
         peaks, _ = find_peaks(ydata)
         if peaks.size > 0:
             highest_peak = peaks[np.argmax(ydata[peaks])]
