@@ -5,8 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from scipy.signal import find_peaks, welch
-from docx import Document
-from docx.shared import Inches
 
 class GLevelPSDApp(tk.Tk):
     def __init__(self):
@@ -26,15 +24,16 @@ class GLevelPSDApp(tk.Tk):
         self.notebook.add(self.glevel_tab, text='G-Levels')
         self.notebook.add(self.psd_tab, text='PSD Plots')
 
-        self.create_input_tab()
-        self.create_glevel_tab()
-        self.create_psd_tab()
-
         self.data = None
         self.velocity_data = None
         self.sensitivity = None
         self.sampling_freq = None
         self.selected_range = None
+        self.velocity_present = tk.BooleanVar()
+
+        self.create_input_tab()
+        self.create_glevel_tab()
+        self.create_psd_tab()
 
     def create_input_tab(self):
         ttk.Label(self.input_tab, text="Sensor Sensitivity:").grid(row=0, column=0, padx=10, pady=10)
@@ -45,21 +44,33 @@ class GLevelPSDApp(tk.Tk):
         self.sampling_freq_entry = ttk.Entry(self.input_tab)
         self.sampling_freq_entry.grid(row=1, column=1, padx=10, pady=10)
 
-        ttk.Button(self.input_tab, text="Load CSV/Excel File", command=self.load_file).grid(row=2, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Load Velocity Profile", command=self.load_velocity_profile).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Plot G-Levels", command=self.plot_glevels).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Export Plots to DOCX", command=self.export_plots_to_docx).grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+        self.velocity_checkbox = ttk.Checkbutton(self.input_tab, text="Velocity Data Present", variable=self.velocity_present, command=self.toggle_velocity_profile)
+        self.velocity_checkbox.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+
+        self.load_velocity_button = ttk.Button(self.input_tab, text="Load Velocity Profile", command=self.load_velocity_profile, state=tk.DISABLED)
+        self.load_velocity_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+        ttk.Button(self.input_tab, text="Load CSV/Excel File", command=self.load_file).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Plot G-Levels", command=self.plot_glevels).grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Plot PSD", command=self.plot_psd_from_selection).grid(row=6, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Export Plots", command=self.export_plots).grid(row=7, column=0, columnspan=2, padx=10, pady=10)
+
+    def toggle_velocity_profile(self):
+        if self.velocity_present.get():
+            self.load_velocity_button.config(state=tk.NORMAL)
+        else:
+            self.load_velocity_button.config(state=tk.DISABLED)
+            self.velocity_data = None  # Clear velocity data if checkbox is unchecked
 
     def create_glevel_tab(self):
         self.glevel_canvas_frame = tk.Canvas(self.glevel_tab)
+        self.glevel_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
         self.scrollbar = ttk.Scrollbar(self.glevel_tab, orient="vertical", command=self.glevel_canvas_frame.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill='y')
         self.glevel_canvas = ttk.Frame(self.glevel_canvas_frame)
 
         self.glevel_canvas_frame.create_window((0, 0), window=self.glevel_canvas, anchor="nw")
         self.glevel_canvas_frame.configure(yscrollcommand=self.scrollbar.set)
-
-        self.glevel_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
-        self.scrollbar.pack(side=tk.RIGHT, fill='y')
 
         self.glevel_canvas.bind("<Configure>", lambda e: self.glevel_canvas_frame.configure(scrollregion=self.glevel_canvas_frame.bbox("all")))
 
@@ -69,14 +80,13 @@ class GLevelPSDApp(tk.Tk):
 
     def create_psd_tab(self):
         self.psd_canvas_frame = tk.Canvas(self.psd_tab)
+        self.psd_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
         self.scrollbar_psd = ttk.Scrollbar(self.psd_tab, orient="vertical", command=self.psd_canvas_frame.yview)
+        self.scrollbar_psd.pack(side=tk.RIGHT, fill='y')
         self.psd_canvas = ttk.Frame(self.psd_canvas_frame)
 
         self.psd_canvas_frame.create_window((0, 0), window=self.psd_canvas, anchor="nw")
         self.psd_canvas_frame.configure(yscrollcommand=self.scrollbar_psd.set)
-
-        self.psd_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
-        self.scrollbar_psd.pack(side=tk.RIGHT, fill='y')
 
         self.psd_canvas.bind("<Configure>", lambda e: self.psd_canvas_frame.configure(scrollregion=self.psd_canvas_frame.bbox("all")))
 
@@ -92,7 +102,7 @@ class GLevelPSDApp(tk.Tk):
             elif file_path.endswith('.xlsx'):
                 self.data = pd.read_excel(file_path)
             messagebox.showinfo("File Loaded", "Vibration profile loaded successfully.")
-            
+
     def load_velocity_profile(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
         if file_path:
@@ -101,7 +111,7 @@ class GLevelPSDApp(tk.Tk):
             elif file_path.endswith('.xlsx'):
                 self.velocity_data = pd.read_excel(file_path)
             messagebox.showinfo("File Loaded", "Velocity profile loaded successfully.")
-            
+
     def plot_glevels(self):
         if self.data is not None:
             try:
@@ -121,7 +131,7 @@ class GLevelPSDApp(tk.Tk):
             self.glevel_axs.clear()
 
             for i in range(0, min(channel_data.shape[1], 24), 3):
-                fig, axs = plt.subplots(3, 1, figsize=(12, 8))
+                fig, axs = plt.subplots(3, 1, figsize=(10, 8))
                 self.glevel_figs.append(fig)
 
                 for j, ax in enumerate(axs):
@@ -131,27 +141,23 @@ class GLevelPSDApp(tk.Tk):
                     ax.set_ylabel("G-Levels")
                     ax.legend(loc='upper right')
 
-                    if self.velocity_data is not None:
-                        ax2 = ax.twinx()
+                    if self.velocity_data is not None and self.velocity_present.get():
                         velocity_time = self.velocity_data.iloc[:, 0]
                         velocity = self.velocity_data.iloc[:, 1]
-                        ax2.plot(velocity_time, velocity, label='Velocity', linestyle='--', color='orange')
-                        ax2.set_ylabel("Velocity")
-                        ax2.legend(loc='lower right')
+                        ax_velocity = ax.twinx()
+                        ax_velocity.plot(velocity_time, velocity, label='Velocity', linestyle='--', color='red')
+                        ax_velocity.set_ylabel("Velocity")
+                        ax_velocity.legend(loc='upper left')
 
                     self.highlight_extreme_peaks(ax)
 
                 self.glevel_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.glevel_canvas)
                 plot.get_tk_widget().pack(fill='both', expand=True)
-                self.glevel_plots.append(plot)
-
-            # Create toolbar outside the loop
-            if self.glevel_plots:
-                plot = self.glevel_plots[0]
-                plot.toolbar = NavigationToolbar2Tk(plot, self.glevel_canvas_frame)
+                plot.toolbar = NavigationToolbar2Tk(plot, self.glevel_canvas)
                 plot.toolbar.update()
-                plot.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
+                plot.get_tk_widget().pack(fill='both', expand=True)
+                self.glevel_plots.append(plot)
 
             self.notebook.select(self.glevel_tab)
         else:
@@ -166,7 +172,7 @@ class GLevelPSDApp(tk.Tk):
             self.psd_axs.clear()
 
             for i in range(0, min(self.data.shape[1]-1, 24), 3):
-                fig, axs = plt.subplots(3, 1, figsize=(12, 8))
+                fig, axs = plt.subplots(3, 1, figsize=(10, 8))
                 self.psd_figs.append(fig)
 
                 for j, ax in enumerate(axs):
@@ -177,7 +183,7 @@ class GLevelPSDApp(tk.Tk):
                         data_subset = self.data
 
                     time = data_subset.iloc[:, 0]
-                    channel_data = data_subset.iloc[:, i+1] * self.sensitivity
+                    channel_data = data_subset.iloc[:, i + 1 + j] * self.sensitivity
 
                     f, Pxx = welch(channel_data, fs=self.sampling_freq)
 
@@ -187,70 +193,55 @@ class GLevelPSDApp(tk.Tk):
                     ax.set_ylabel("PSD [V**2/Hz]")
                     ax.legend(loc='upper right')
 
-                    self.highlight_extreme_peaks(ax, f, Pxx)
+                    self.highlight_extreme_peaks(ax)
 
                 self.psd_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.psd_canvas)
                 plot.get_tk_widget().pack(fill='both', expand=True)
-                self.psd_plots.append(plot)
-
-            # Create toolbar outside the loop
-            if self.psd_plots:
-                plot = self.psd_plots[0]
-                plot.toolbar = NavigationToolbar2Tk(plot, self.psd_canvas_frame)
+                plot.toolbar = NavigationToolbar2Tk(plot, self.psd_canvas)
                 plot.toolbar.update()
-                plot.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
-
-            ttk.Button(self.psd_tab, text="Plot PSD", command=self.plot_psd_from_selection).pack(side=tk.BOTTOM, fill=tk.X)
+                plot.get_tk_widget().pack(fill='both', expand=True)
+                self.psd_plots.append(plot)
 
             self.notebook.select(self.psd_tab)
         else:
             messagebox.showerror("Data Error", "Please load the data file first.")
 
-    def highlight_extreme_peaks(self, ax, xdata=None, ydata=None):
-        if xdata is None or ydata is None:
-            for line in ax.get_lines():
-                xdata = line.get_xdata()
-                ydata = line.get_ydata()
+    def highlight_extreme_peaks(self, ax):
+        for line in ax.get_lines():
+            xdata = line.get_xdata()
+            ydata = line.get_ydata()
+            if len(ydata) > 0:
+                max_idx = np.argmax(ydata)
+                min_idx = np.argmin(ydata)
+                ax.plot(xdata[max_idx], ydata[max_idx], marker='o', markersize=8, color='red')
+                ax.text(xdata[max_idx], ydata[max_idx], f'{ydata[max_idx]:.2f}', fontsize=8, color='red', ha='left', va='bottom', bbox=dict(facecolor='white', alpha=0.5))
+                ax.plot(xdata[min_idx], ydata[min_idx], marker='o', markersize=8, color='blue')
+                ax.text(xdata[min_idx], ydata[min_idx], f'{ydata[min_idx]:.2f}', fontsize=8, color='blue', ha='left', va='top', bbox=dict(facecolor='white', alpha=0.5))
 
-        peaks, _ = find_peaks(ydata)
-        if peaks.size > 0:
-            highest_peak = peaks[np.argmax(ydata[peaks])]
-            lowest_peak = peaks[np.argmin(ydata[peaks])]
-            extreme_peaks = [highest_peak, lowest_peak]
-
-            for idx in extreme_peaks:
-                ax.plot(xdata[idx], ydata[idx], marker='o', markersize=8, color='red', linestyle='None')
-                offset = (ydata[idx] * 0.05) if ydata[idx] != 0 else 1  # Adjust offset to prevent overlap
-                ax.annotate(f'({xdata[idx]:.2f}, {ydata[idx]:.2f})', 
-                            xy=(xdata[idx], ydata[idx]), 
-                            xytext=(xdata[idx], ydata[idx] + offset),
-                            fontsize=8, 
-                            color='red', 
-                            arrowprops=dict(facecolor='red', shrink=0.05))
-
-    def export_plots_to_docx(self):
-        if not self.glevel_figs and not self.psd_figs:
-            messagebox.showerror("Export Error", "No plots available to export.")
-            return
+    def export_plots(self):
+        from docx import Document
+        from docx.shared import Inches
 
         doc = Document()
-        doc.add_heading('G-Level and PSD Plots', level=1)
+        doc.add_heading('G-Levels and PSD Plots', 0)
 
-        if self.glevel_figs: 
-            doc.add_heading('G-Level Plots', level=2)
-            for i, fig in enumerate(self.glevel_figs):
-                fig.savefig(f'glevel_plot_{i}.png')
-                doc.add_picture(f'glevel_plot_{i}.png', width=Inches(6))
+        for fig in self.glevel_figs:
+            img_path = '/tmp/glevel_plot.png'
+            fig.savefig(img_path)
+            doc.add_paragraph('G-Level Plot')
+            doc.add_picture(img_path, width=Inches(6))
 
-        if self.psd_figs:
-            doc.add_heading('PSD Plots', level=2)
-            for i, fig in enumerate(self.psd_figs):
-                fig.savefig(f'psd_plot_{i}.png')
-                doc.add_picture(f'psd_plot_{i}.png', width=Inches(6))
+        for fig in self.psd_figs:
+            img_path = '/tmp/psd_plot.png'
+            fig.savefig(img_path)
+            doc.add_paragraph('PSD Plot')
+            doc.add_picture(img_path, width=Inches(6))
 
-        doc.save('plots.docx')
-        messagebox.showinfo("Export Success", "Plots have been exported to plots.docx")
+        save_path = filedialog.asksaveasfilename(defaultextension=".docx", filetypes=[("Word documents", "*.docx")])
+        if save_path:
+            doc.save(save_path)
+            messagebox.showinfo("Export Successful", "Plots exported successfully.")
 
 if __name__ == "__main__":
     app = GLevelPSDApp()
