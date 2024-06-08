@@ -149,7 +149,7 @@ class GLevelPSDApp(tk.Tk):
                 return
 
             time = self.data.iloc[:, 0]
-            channel_data = self.data.iloc[:, 1:] * self.sensitivity
+            channel_data = self.data.iloc[:, 1:] * 1000/ self.sensitivity
 
             self.clear_plots(self.glevel_plots, self.glevel_figs, self.glevel_axs)
 
@@ -172,7 +172,7 @@ class GLevelPSDApp(tk.Tk):
                         ax_velocity.set_ylabel("Velocity")
                         ax_velocity.legend(loc='upper left')
 
-                    # self.highlight_extreme_peaks(ax)
+                    self.highlight_extreme_peaks(ax)
 
                 self.glevel_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.glevel_canvas)
@@ -210,17 +210,17 @@ class GLevelPSDApp(tk.Tk):
                         data_subset = self.data
 
                     time = data_subset.iloc[:, 0]
-                    channel_data = data_subset.iloc[:, i + 1 + j] * self.sensitivity
+                    channel_data = data_subset.iloc[:, i + 1 + j] *1000/ self.sensitivity
 
-                    f, Pxx = welch(channel_data, fs=self.sampling_freq,nperseg=self.nperseg)
+                    f, Pxx = welch(channel_data, fs=self.sampling_freq,nperseg=self.nperseg,noverlap=0,nfft=2048)
 
                     ax.clear()
                     ax.semilogy(f, Pxx, label=f'Channel {i//3 + 1} - {"XYZ"[j]}')
                     ax.set_xlabel("Frequency [Hz]")
-                    ax.set_ylabel("PSD [V**2/Hz]")
+                    ax.set_ylabel("PSD [G^2/Hz]")
                     ax.legend(loc='upper right')
 
-                    # self.highlight_extreme_peaks(ax)
+                    self.highlight_extreme_peaks(ax)
 
                 self.psd_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.psd_canvas)
@@ -234,17 +234,17 @@ class GLevelPSDApp(tk.Tk):
         else:
             messagebox.showerror("Data Error", "Please load the data file first.")
 
-    # def highlight_extreme_peaks(self, ax):
-    #     for line in ax.get_lines():
-    #         xdata = line.get_xdata()
-    #         ydata = line.get_ydata()
-    #         if len(ydata) > 0:
-    #             max_idx = np.argmax(ydata)
-    #             min_idx = np.argmin(ydata)
-    #             ax.plot(xdata[max_idx], ydata[max_idx], marker='o', markersize=8, color='red')
-    #             ax.text(xdata[max_idx], ydata[max_idx], f'{ydata[max_idx]:.2f}', fontsize=8, color='red', ha='left', va='bottom', bbox=dict(facecolor='white', alpha=0.5))
-    #             ax.plot(xdata[min_idx], ydata[min_idx], marker='o', markersize=8, color='blue')
-    #             ax.text(xdata[min_idx], ydata[min_idx], f'{ydata[min_idx]:.2f}', fontsize=8, color='blue', ha='left', va='top', bbox=dict(facecolor='white', alpha=0.5))
+    def highlight_extreme_peaks(self, ax):
+        for line in ax.get_lines():
+            xdata = line.get_xdata()
+            ydata = line.get_ydata()
+            if len(ydata) > 0:
+                max_idx = np.argmax(ydata)
+                min_idx = np.argmin(ydata)
+                ax.plot(xdata[max_idx], ydata[max_idx], marker='o', markersize=2, color='red')
+                ax.text(xdata[max_idx], ydata[max_idx], f'{ydata[max_idx]:}', fontsize=8, color='red', ha='left', va='bottom', bbox=dict(facecolor='white', alpha=0.5))
+                ax.plot(xdata[min_idx], ydata[min_idx], marker='o', markersize=2, color='blue')
+                ax.text(xdata[min_idx], ydata[min_idx], f'{ydata[min_idx]:}', fontsize=8, color='blue', ha='left', va='top', bbox=dict(facecolor='white', alpha=0.5))
 
     def clear_plots(self, plots, figs, axs):
         for plot in plots:
