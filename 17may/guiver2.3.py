@@ -4,9 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from scipy.signal import welch
-import concurrent.futures
-import os
+from scipy.signal import find_peaks, welch
 
 class GLevelPSDApp(tk.Tk):
     def __init__(self):
@@ -27,18 +25,16 @@ class GLevelPSDApp(tk.Tk):
         self.notebook.add(self.psd_tab, text='PSD Plots')
 
         self.data = None
-        self.velocity_data = None
         self.sensitivity = None
         self.sampling_freq = None
         self.selected_range = None
-        self.velocity_present = tk.BooleanVar()
 
         self.create_input_tab()
         self.create_glevel_tab()
         self.create_psd_tab()
 
     def create_input_tab(self):
-        ttk.Label(self.input_tab, text="Sensor Sensitivity:").grid(row=0, column=0, padx=10, pady=10)
+        ttk.Label(self.input_tab, text="Sensor Sensitivity (in mV):").grid(row=0, column=0, padx=10, pady=10)
         self.sensitivity_entry = ttk.Entry(self.input_tab)
         self.sensitivity_entry.grid(row=0, column=1, padx=10, pady=10)
 
@@ -46,35 +42,21 @@ class GLevelPSDApp(tk.Tk):
         self.sampling_freq_entry = ttk.Entry(self.input_tab)
         self.sampling_freq_entry.grid(row=1, column=1, padx=10, pady=10)
 
-        self.velocity_checkbox = ttk.Checkbutton(self.input_tab, text="Velocity Data Present", variable=self.velocity_present, command=self.toggle_velocity_profile)
-        self.velocity_checkbox.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
-
-        self.load_velocity_button = ttk.Button(self.input_tab, text="Load Velocity Profile", command=self.load_velocity_profile, state=tk.DISABLED)
-        self.load_velocity_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
-
-        ttk.Button(self.input_tab, text="Load CSV/Excel File", command=self.load_file).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Plot G-Levels", command=self.plot_glevels).grid(row=5, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Plot PSD", command=self.plot_psd_from_selection).grid(row=6, column=0, columnspan=2, padx=10, pady=10)
-        ttk.Button(self.input_tab, text="Export Plots", command=self.export_plots).grid(row=7, column=0, columnspan=2, padx=10, pady=10)
-
-    def toggle_velocity_profile(self):
-        if self.velocity_present.get():
-            self.load_velocity_button.config(state=tk.NORMAL)
-        else:
-            self.load_velocity_button.config(state=tk.DISABLED)
-            self.velocity_data = None  # Clear velocity data if checkbox is unchecked
+        ttk.Button(self.input_tab, text="Load CSV/Excel File", command=self.load_file).grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Plot G-Levels", command=self.plot_glevels).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Plot PSD", command=self.plot_psd_from_selection).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
+        ttk.Button(self.input_tab, text="Export Plots", command=self.export_plots).grid(row=5, column=0, columnspan=2, padx=10, pady=10)
 
     def create_glevel_tab(self):
         self.glevel_canvas_frame = tk.Canvas(self.glevel_tab)
         self.glevel_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
         self.scrollbar = ttk.Scrollbar(self.glevel_tab, orient="vertical", command=self.glevel_canvas_frame.yview)
         self.scrollbar.pack(side=tk.RIGHT, fill='y')
-        self.glevel_canvas = ttk.Frame(self.glevel_canvas_frame)
-
-        self.glevel_canvas_frame.create_window((0, 0), window=self.glevel_canvas, anchor="nw")
         self.glevel_canvas_frame.configure(yscrollcommand=self.scrollbar.set)
 
-        self.glevel_canvas.bind("<Configure>", lambda e: self.glevel_canvas_frame.configure(scrollregion=self.glevel_canvas_frame.bbox("all")))
+        self.glevel_canvas = ttk.Frame(self.glevel_canvas_frame)
+        self.glevel_canvas_frame.create_window((0, 0), window=self.glevel_canvas, anchor="nw")
+        self.glevel_canvas_frame.bind("<Configure>", lambda e: self.glevel_canvas_frame.configure(scrollregion=self.glevel_canvas_frame.bbox("all")))
 
         self.glevel_plots = []
         self.glevel_figs = []
@@ -85,148 +67,62 @@ class GLevelPSDApp(tk.Tk):
         self.psd_canvas_frame.pack(side=tk.LEFT, fill='both', expand=True)
         self.scrollbar_psd = ttk.Scrollbar(self.psd_tab, orient="vertical", command=self.psd_canvas_frame.yview)
         self.scrollbar_psd.pack(side=tk.RIGHT, fill='y')
-        self.psd_canvas = ttk.Frame(self.psd_canvas_frame)
-
-        self.psd_canvas_frame.create_window((0, 0), window=self.psd_canvas, anchor="nw")
         self.psd_canvas_frame.configure(yscrollcommand=self.scrollbar_psd.set)
 
-        self.psd_canvas.bind("<Configure>", lambda e: self.psd_canvas_frame.configure(scrollregion=self.psd_canvas_frame.bbox("all")))
+        self.psd_canvas = ttk.Frame(self.psd_canvas_frame)
+        self.psd_canvas_frame.create_window((0, 0), window=self.psd_canvas, anchor="nw")
+        self.psd_canvas_frame.bind("<Configure>", lambda e: self.psd_canvas_frame.configure(scrollregion=self.psd_canvas_frame.bbox("all")))
 
         self.psd_plots = []
         self.psd_figs = []
         self.psd_axs = []
 
-
     def load_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
         if file_path:
-            try:
-                if file_path.endswith('.xlsx'):
-                    self.data = self.load_excel_parallel(file_path)
-                elif file_path.endswith('.csv'):
-                    self.data = pd.read_csv(file_path)
-                messagebox.showinfo("File Loaded", "Vibration profile loaded successfully.")
-            except Exception as e:
-                messagebox.showerror("File Error", f"An error occurred while loading the file: {e}")
-
-    def load_excel_parallel(self, file_path):
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            excel_data = pd.read_excel(file_path, sheet_name=None)
-            futures = [executor.submit(pd.DataFrame, sheet_data) for sheet_data in excel_data.values()]
-            results = [future.result() for future in concurrent.futures.as_completed(futures)]
-        return pd.concat(results, axis=0, ignore_index=True)
-
-
-
-    # def load_file(self):
-    #     file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
-    #     if file_path:
-    #         try:
-    #             if file_path.endswith('.xlsx'):
-    #                 csv_file_path = self.convert_excel_to_csv(file_path)
-    #                 self.data = pd.read_csv(csv_file_path)
-    #                 os.remove(csv_file_path)  # Remove the temporary CSV file
-    #             elif file_path.endswith('.csv'):
-    #                 self.data = pd.read_csv(file_path)
-    #             messagebox.showinfo("File Loaded", "Vibration profile loaded successfully.")
-    #         except Exception as e:
-    #             messagebox.showerror("File Error", f"An error occurred while loading the file: {e}")
-
-    # def convert_excel_to_csv(self, excel_file_path):
-    #     csv_file_path = excel_file_path.replace('.xlsx', '.csv')
-    #     df = pd.read_excel(excel_file_path)
-    #     df.to_csv(csv_file_path, index=False)
-    #     return csv_file_path
-    
-    
-    def load_csv_parallel(self, file_path):
-        chunks = pd.read_csv(file_path, chunksize=100000)
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(lambda chunk: chunk, chunk) for chunk in chunks]
-            result = pd.concat([future.result() for future in concurrent.futures.as_completed(futures)])
-        return result
-
-    # def load_excel_parallel(self, file_path):
-    #     xls = pd.ExcelFile(file_path)
-    #     if len(xls.sheet_names) > 1:
-    #         with concurrent.futures.ThreadPoolExecutor() as executor:
-    #             futures = {executor.submit(pd.read_excel, file_path, sheet_name=sheet): sheet for sheet in xls.sheet_names}
-    #             results = [future.result() for future in concurrent.futures.as_completed(futures)]
-    #         return pd.concat(results, axis=1)
-    #     else:
-    #         df = pd.read_excel(file_path, sheet_name=xls.sheet_names[0])
-    #         chunks = np.array_split(df, os.cpu_count())
-    #         with concurrent.futures.ThreadPoolExecutor() as executor:
-    #             futures = [executor.submit(pd.DataFrame, chunk) for chunk in chunks]
-    #             result = pd.concat([future.result() for future in concurrent.futures.as_completed(futures)])
-    #         return result
-
-
-    def load_excel_parallel(self,file_path):
-        def load_sheet(sheet_name):
-            return pd.read_excel(file_path, sheet_name=sheet_name)
-
-        with pd.ExcelFile(file_path) as xls:
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                sheet_names = xls.sheet_names
-                futures = {executor.submit(load_sheet, sheet_name): sheet_name for sheet_name in sheet_names}
-                results = [future.result() for future in concurrent.futures.as_completed(futures)]
-            return pd.concat(results, axis=1)
-
-    def load_velocity_profile(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx")])
-        if file_path:
-            try:
-                if file_path.endswith('.csv'):
-                    self.velocity_data = self.load_csv_parallel(file_path)
-                elif file_path.endswith('.xlsx'):
-                    self.velocity_data = self.load_excel_parallel(file_path)
-                messagebox.showinfo("File Loaded", "Velocity profile loaded successfully.")
-            except Exception as e:
-                messagebox.showerror("File Error", f"An error occurred while loading the file: {e}")
+            if file_path.endswith('.csv'):
+                self.data = pd.read_csv(file_path)
+            elif file_path.endswith('.xlsx'):
+                self.data = pd.read_excel(file_path)
+            messagebox.showinfo("File Loaded", "Vibration profile loaded successfully.")
 
     def plot_glevels(self):
         if self.data is not None:
             try:
-                self.sensitivity = float(self.sensitivity_entry.get())
+                self.sensitivity = float(self.sensitivity_entry.get()) / 1000  # Convert mV to V
                 self.sampling_freq = float(self.sampling_freq_entry.get())
             except ValueError:
                 messagebox.showerror("Input Error", "Please enter valid numbers for sensitivity and sampling frequency.")
                 return
 
-            self.clear_plots(self.glevel_plots, self.glevel_figs, self.glevel_axs)
-
             time = self.data.iloc[:, 0]
             channel_data = self.data.iloc[:, 1:] * self.sensitivity
 
+            for plot in self.glevel_plots:
+                plot.get_tk_widget().pack_forget()
+            self.glevel_plots.clear()
+            self.glevel_figs.clear()
+            self.glevel_axs.clear()
+
             for i in range(0, min(channel_data.shape[1], 24), 3):
-                fig, axs = plt.subplots(3, 1, figsize=(19, 10))
+                fig, axs = plt.subplots(3, 1, figsize=(10, 8))
                 self.glevel_figs.append(fig)
 
                 for j, ax in enumerate(axs):
                     ax.clear()
-                    ax.plot(time, channel_data.iloc[:, i + j], label=f'Channel {i // 3 + 1} - {"XYZ"[j]}')
+                    ax.plot(time, channel_data.iloc[:, i+j], label=f'Channel {i//3 + 1} - {"XYZ"[j]}')
                     ax.set_xlabel("Time")
                     ax.set_ylabel("G-Levels")
                     ax.legend(loc='upper right')
 
-                    if self.velocity_data is not None and self.velocity_present.get():
-                        velocity_time = self.velocity_data.iloc[:, 0]
-                        velocity = self.velocity_data.iloc[:, 1]
-                        ax_velocity = ax.twinx()
-                        ax_velocity.plot(velocity_time, velocity, label='Velocity', linestyle='--', color='red')
-                        ax_velocity.set_ylabel("Velocity")
-                        ax_velocity.legend(loc='upper left')
+                    self.highlight_extreme_peaks(ax)
 
-                    # self.highlight_extreme_peaks(ax)
-
-                self.glevel_canvas.update_idletasks()
                 plot = FigureCanvasTkAgg(fig, master=self.glevel_canvas)
                 plot.get_tk_widget().pack(fill='both', expand=True)
                 plot.toolbar = NavigationToolbar2Tk(plot, self.glevel_canvas)
                 plot.toolbar.update()
+                plot.get_tk_widget().pack(fill='both', expand=True)
                 self.glevel_plots.append(plot)
-                
 
             self.notebook.select(self.glevel_tab)
         else:
@@ -234,35 +130,59 @@ class GLevelPSDApp(tk.Tk):
 
     def plot_psd_from_selection(self):
         if self.data is not None:
-            self.clear_plots(self.psd_plots, self.psd_figs, self.psd_axs)
-            selected_channel = 0  # Default to first channel if no range is selected
+            for plot in self.psd_plots:
+                plot.get_tk_widget().pack_forget()
+            self.psd_plots.clear()
+            self.psd_figs.clear()
+            self.psd_axs.clear()
 
-            if self.selected_range is not None:
-                selected_channel = int(self.selected_range[0]) // 3
+            for i in range(0, min(self.data.shape[1]-1, 24), 3):
+                fig, axs = plt.subplots(3, 1, figsize=(10, 8))
+                self.psd_figs.append(fig)
 
-            time = self.data.iloc[:, 0]
-            data = self.data.iloc[:, 1 + selected_channel * 3: 1 + (selected_channel + 1) * 3] * self.sensitivity
+                for j, ax in enumerate(axs):
+                    if self.selected_range is not None:
+                        start, end = self.selected_range
+                        data_subset = self.data[(self.data.iloc[:, 0] >= start) & (self.data.iloc[:, 0] <= end)]
+                    else:
+                        data_subset = self.data
 
-            fig, axs = plt.subplots(3, 1, figsize=(19, 10))
-            self.psd_figs.append(fig)
+                    time = data_subset.iloc[:, 0]
+                    channel_data = data_subset.iloc[:, i + 1 + j] * self.sensitivity
 
-            for i, ax in enumerate(axs):
-                f, Pxx = welch(data.iloc[:, i], fs=self.sampling_freq, nperseg=1024)
-                ax.clear()
-                ax.semilogy(f, np.sqrt(Pxx), label=f'Channel {selected_channel + 1} - {"XYZ"[i]}')
-                ax.set_xlabel("Frequency (Hz)")
-                ax.set_ylabel("PSD (G^2/Hz)")
-                ax.legend(loc='upper right')
+                    f, Pxx = welch(channel_data, fs=self.sampling_freq)
 
-            self.psd_canvas.update_idletasks()
-            plot = FigureCanvasTkAgg(fig, master=self.psd_canvas)
-            plot.get_tk_widget().pack(fill='both', expand=True)
-            plot.toolbar = NavigationToolbar2Tk(plot, self.psd_canvas)
-            plot.toolbar.update()
-            self.psd_plots.append(plot)
-        
-        self.notebook.select(self.psd_tab)
+                    ax.clear()
+                    ax.semilogy(f, Pxx, label=f'Channel {i//3 + 1} - {"XYZ"[j]}')
+                    ax.set_xscale("log")  # Set x-axis to logarithmic scale
+                    ax.set_xlabel("Frequency [Hz]")
+                    ax.set_ylabel("PSD [V**2/Hz]")
+                    ax.legend(loc='upper right')
 
+                    self.highlight_extreme_peaks(ax)
+
+                plot = FigureCanvasTkAgg(fig, master=self.psd_canvas)
+                plot.get_tk_widget().pack(fill='both', expand=True)
+                plot.toolbar = NavigationToolbar2Tk(plot, self.psd_canvas)
+                # plot.toolbar.update()
+                plot.get_tk_widget().pack(fill='both', expand=True)
+                self.psd_plots.append(plot)
+
+            self.notebook.select(self.psd_tab)
+        else:
+            messagebox.showerror("Data Error", "Please load the data file first.")
+
+    def highlight_extreme_peaks(self, ax):
+        for line in ax.get_lines():
+            xdata = line.get_xdata()
+            ydata = line.get_ydata()
+            if len(ydata) > 0:
+                max_idx = np.argmax(ydata)
+                min_idx = np.argmin(ydata)
+                ax.plot(xdata[max_idx], ydata[max_idx], marker='o', markersize=8, color='red')
+                ax.text(xdata[max_idx], ydata[max_idx], f'{ydata[max_idx]:}', fontsize=8, color='red', ha='left', va='bottom', bbox=dict(facecolor='white', alpha=0.5))
+                ax.plot(xdata[min_idx], ydata[min_idx], marker='o', markersize=8, color='blue')
+                ax.text(xdata[min_idx], ydata[min_idx], f'{ydata[min_idx]:}', fontsize=8, color='blue', ha='left', va='top', bbox=dict(facecolor='white', alpha=0.5))
 
     def export_plots(self):
         from docx import Document
@@ -287,25 +207,6 @@ class GLevelPSDApp(tk.Tk):
         if save_path:
             doc.save(save_path)
             messagebox.showinfo("Export Successful", "Plots exported successfully.")
-    # def highlight_extreme_peaks(self, ax):
-    #     for line in ax.get_lines():
-    #         xdata = line.get_xdata()
-    #         ydata = line.get_ydata()
-    #         if len(ydata) > 0:
-    #             max_idx = np.argmax(ydata)
-    #             min_idx = np.argmin(ydata)
-    #             ax.plot(xdata[max_idx], ydata[max_idx], marker='o', markersize=8, color='red')
-    #             ax.text(xdata[max_idx], ydata[max_idx], f'{ydata[max_idx]:.2f}', fontsize=8, color='red', ha='left', va='bottom', bbox=dict(facecolor='white', alpha=0.5))
-    #             ax.plot(xdata[min_idx], ydata[min_idx], marker='o', markersize=8, color='blue')
-    #             ax.text(xdata[min_idx], ydata[min_idx], f'{ydata[min_idx]:.2f}', fontsize=8, color='blue', ha='left', va='top', bbox=dict(facecolor='white', alpha=0.5))
-
-
-    def clear_plots(self, plots, figs, axs):
-        for plot in plots:
-            plot.get_tk_widget().destroy()
-        plots.clear()
-        figs.clear()
-        axs.clear()
 
 if __name__ == "__main__":
     app = GLevelPSDApp()

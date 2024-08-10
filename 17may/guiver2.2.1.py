@@ -32,7 +32,7 @@ class GLevelPSDApp(tk.Tk):
         self.data = None
         self.velocity_data = None
         self.sensitivity = None
-        self.nperseg = None
+        self.nperseg = None   
         self.sampling_freq = None
         self.selected_range = None
         self.velocity_present = tk.BooleanVar()
@@ -280,3 +280,6 @@ class GLevelPSDApp(tk.Tk):
 if __name__ == "__main__":
     app = GLevelPSDApp()
     app.mainloop()
+ 
+a
+zx
